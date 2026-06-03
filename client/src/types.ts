@@ -1,5 +1,6 @@
 export type CardType = 'suspect' | 'weapon' | 'room';
 export type GameStatus = 'waiting' | 'playing' | 'finished';
+export type NoteMark = 'unknown' | 'no' | 'maybe' | 'yes';
 
 export interface Card {
   id: string;
@@ -15,6 +16,18 @@ export interface PublicPlayer {
   eliminated: boolean;
 }
 
+export interface Suggestion {
+  suspect: string;
+  weapon: string;
+  room: string;
+}
+
+export interface PublicPendingDisprove {
+  suggesterId: string;
+  disproverId: string;
+  suggestion: Suggestion;
+}
+
 export interface PublicRoomState {
   roomCode: string;
   status: GameStatus;
@@ -23,12 +36,12 @@ export interface PublicRoomState {
   turnNumber: number;
   winnerId: string | null;
   lastMessage: string;
-}
-
-export interface Suggestion {
-  suspect: string;
-  weapon: string;
-  room: string;
+  diceValue: number | null;
+  reachableRooms: string[];
+  hasRolled: boolean;
+  hasMoved: boolean;
+  hasSuggested: boolean;
+  pendingDisprove: PublicPendingDisprove | null;
 }
 
 export interface CardMeta {

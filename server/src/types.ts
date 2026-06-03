@@ -28,12 +28,25 @@ export interface Suggestion {
   room: string;
 }
 
+export interface PendingDisprove {
+  suggesterId: string;
+  disproverId: string;
+  suggestion: Suggestion;
+  matchingCards: Card[];
+}
+
 export interface PublicPlayer {
   id: string;
   nickname: string;
   isHost: boolean;
   location: string | null;
   eliminated: boolean;
+}
+
+export interface PublicPendingDisprove {
+  suggesterId: string;
+  disproverId: string;
+  suggestion: Suggestion;
 }
 
 export interface PublicRoomState {
@@ -44,6 +57,12 @@ export interface PublicRoomState {
   turnNumber: number;
   winnerId: string | null;
   lastMessage: string;
+  diceValue: number | null;
+  reachableRooms: string[];
+  hasRolled: boolean;
+  hasMoved: boolean;
+  hasSuggested: boolean;
+  pendingDisprove: PublicPendingDisprove | null;
 }
 
 export interface Room {
@@ -55,4 +74,10 @@ export interface Room {
   turnNumber: number;
   winnerId: string | null;
   lastMessage: string;
+  diceValue: number | null;
+  reachableRooms: string[];
+  hasRolled: boolean;
+  hasMoved: boolean;
+  hasSuggested: boolean;
+  pendingDisprove: PendingDisprove | null;
 }
