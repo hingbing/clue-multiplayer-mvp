@@ -1,21 +1,46 @@
-export const suspects = ['Green', 'Mustard', 'Peacock', 'Plum', 'Scarlet', 'White'];
-export const weapons = ['Knife', 'Candlestick', 'Revolver', 'Rope', 'Lead Pipe', 'Wrench'];
-export const rooms = ['Kitchen', 'Ballroom', 'Conservatory', 'Dining Room', 'Billiard Room', 'Library', 'Lounge', 'Hall', 'Study'];
+export const suspects = [
+    "스칼렛",
+    "머스터드",
+    "화이트",
+    "그린",
+    "피콕",
+    "플럼",
+];
+export const weapons = ["촛대", "칼", "쇠파이프", "권총", "밧줄", "렌치"];
+export const rooms = [
+    "주방",
+    "무도회장",
+    "온실",
+    "식당",
+    "당구실",
+    "도서관",
+    "거실",
+    "현관",
+    "서재",
+];
 export const roomGraph = {
-    Kitchen: ['Ballroom', 'Dining Room'],
-    Ballroom: ['Kitchen', 'Conservatory', 'Billiard Room'],
-    Conservatory: ['Ballroom', 'Billiard Room'],
-    'Dining Room': ['Kitchen', 'Billiard Room', 'Lounge'],
-    'Billiard Room': ['Ballroom', 'Conservatory', 'Dining Room', 'Library'],
-    Library: ['Billiard Room', 'Study'],
-    Lounge: ['Dining Room', 'Hall'],
-    Hall: ['Lounge', 'Study'],
-    Study: ['Hall', 'Library'],
+    주방: ["무도회장", "식당"],
+    무도회장: ["주방", "온실", "당구실"],
+    온실: ["무도회장", "당구실"],
+    식당: ["주방", "당구실", "거실"],
+    당구실: ["무도회장", "온실", "식당", "도서관"],
+    도서관: ["당구실", "서재"],
+    거실: ["식당", "현관"],
+    현관: ["거실", "서재"],
+    서재: ["현관", "도서관"],
 };
 export const allCards = [
-    ...suspects.map((name) => ({ id: `suspect-${name}`, type: 'suspect', name })),
-    ...weapons.map((name) => ({ id: `weapon-${name}`, type: 'weapon', name })),
-    ...rooms.map((name) => ({ id: `room-${name}`, type: 'room', name })),
+    ...suspects.map((name) => ({
+        id: `suspect-${name}`,
+        type: "suspect",
+        name,
+    })),
+    ...weapons.map((name) => ({
+        id: `weapon-${name}`,
+        type: "weapon",
+        name,
+    })),
+    ...rooms.map((name) => ({ id: `room-${name}`, type: "room", name })),
 ];
 export function shuffle(items) {
     const copy = [...items];
@@ -39,7 +64,9 @@ export function getReachableRooms(startRoom, steps) {
     if (!rooms.includes(startRoom) || steps <= 0)
         return [];
     const distances = new Map();
-    const queue = [{ room: startRoom, distance: 0 }];
+    const queue = [
+        { room: startRoom, distance: 0 },
+    ];
     distances.set(startRoom, 0);
     while (queue.length > 0) {
         const current = queue.shift();
