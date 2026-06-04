@@ -113,3 +113,58 @@ h1 { font-size: clamp(36px, 6vw, 64px); margin-bottom: 10px; }
 .mark.maybe { background: rgba(215,168,79,.2); color: #ffd783; }
 .mark.yes { background: rgba(93,196,129,.22); color: #b9ffd0; }
 @media (max-width: 1100px) { .gameGrid { grid-template-columns: 1fr; } }
+.player.offline { border-color: rgba(132,226,255,.45); opacity: .72; }
+.player.offline b { color: #84e2ff; }
+
+.statusHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.statusHeader h2 { margin-bottom: 0; }
+.passButton {
+  min-width: 140px;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+.rightColumn {
+  display: grid;
+  gap: 20px;
+}
+.accusationCard {
+  padding: 22px;
+  border-color: rgba(255,116,116,.28);
+  background: linear-gradient(145deg, rgba(255,116,116,.12), rgba(255,255,255,.045));
+}
+.accuseHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.accuseHeader h2 { margin-bottom: 0; }
+.warningText {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(255,116,116,.38);
+  background: rgba(255,116,116,.14);
+  color: #ffc2c2;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.accusationCard .picker {
+  margin-top: 12px;
+}
+@media (max-width: 700px) {
+  .statusHeader, .accuseHeader {
+    display: grid;
+  }
+  .passButton {
+    width: 100%;
+  }
+}

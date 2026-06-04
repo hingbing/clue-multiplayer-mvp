@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { socket } from './socket';
 import type { Card, CardMeta, NoteMark, PublicPlayer, PublicRoomState, Suggestion } from './types';
 
@@ -6,9 +6,14 @@ const emptyMeta: CardMeta = { suspects: [], weapons: [], rooms: [] };
 const emptyPick: Suggestion = { suspect: '', weapon: '', room: '' };
 const markCycle: NoteMark[] = ['unknown', 'no', 'maybe', 'yes'];
 
+const STORAGE_PLAYER_ID = 'clue_player_id';
+const STORAGE_ROOM_CODE = 'clue_room_code';
+const STORAGE_NICKNAME = 'clue_nickname';
+
 function App() {
-  const [nickname, setNickname] = useState('');
-  const [joinCode, setJoinCode] = useState('');
+  const [nickname, setNickname] = useState(() => localStorage.getItem(STORAGE_NICKNAME) ?? '');
+  const [joinCode, setJoinCode] = useState(() => localStorage.getItem(STORAGE_ROOM_CODE) ?? '');
+  const [myPlayerId, setMyPlayerId] = useState(() => localStorage.getItem(STORAGE_PLAYER_ID) ?? '');
   const [roomState, setRoomState] = useState<PublicRoomState | null>(null);
   const [myCards, setMyCards] = useState<Card[]>([]);
   const [meta, setMeta] = useState<CardMeta>(emptyMeta);
@@ -21,24 +26,88 @@ function App() {
   const [disproveChoices, setDisproveChoices] = useState<Card[]>([]);
   const [noteMarks, setNoteMarks] = useState<Record<string, NoteMark>>({});
   const [history, setHistory] = useState<string[]>([]);
+  const [rejoinTried, setRejoinTried] = useState(false);
+  const roomStateRef = useRef<PublicRoomState | null>(null);
 
   useEffect(() => {
-    socket.on('meta:cards', (data: CardMeta) => {
+    roomStateRef.current = roomState;
+  }, [roomState]);
+
+  useEffect(() => {
+    function saveSession(playerId: string, roomCode: string, nextNickname?: string) {
+      localStorage.setItem(STORAGE_PLAYER_ID, playerId);
+      localStorage.setItem(STORAGE_ROOM_CODE, roomCode);
+      if (nextNickname) localStorage.setItem(STORAGE_NICKNAME, nextNickname);
+      setMyPlayerId(playerId);
+      setJoinCode(roomCode);
+      if (nextNickname) setNickname(nextNickname);
+    }
+
+    function handleMeta(data: CardMeta) {
       setMeta(data);
       setSuggestion({ suspect: data.suspects[0] ?? '', weapon: data.weapons[0] ?? '', room: data.rooms[0] ?? '' });
       setAccusation({ suspect: data.suspects[0] ?? '', weapon: data.weapons[0] ?? '', room: data.rooms[0] ?? '' });
       setMoveRoom(data.rooms[0] ?? '');
-    });
+    }
 
-    socket.on('room:state', (state: PublicRoomState) => {
+    function handleRoomState(state: PublicRoomState) {
       setRoomState(state);
-      if (state.reachableRooms.length > 0 && !state.reachableRooms.includes(moveRoom)) {
-        setMoveRoom(state.reachableRooms[0]);
+      setMoveRoom((prev) => {
+        if (state.reachableRooms.length > 0 && !state.reachableRooms.includes(prev)) {
+          return state.reachableRooms[0];
+        }
+        return prev;
+      });
+    }
+
+    function attemptRejoin() {
+      const storedPlayerId = localStorage.getItem(STORAGE_PLAYER_ID);
+      const storedRoomCode = localStorage.getItem(STORAGE_ROOM_CODE);
+      if (storedPlayerId && storedRoomCode && !roomStateRef.current) {
+        socket.emit('room:rejoin', { playerId: storedPlayerId, roomCode: storedRoomCode });
       }
+      setRejoinTried(true);
+    }
+
+    socket.on('connect', attemptRejoin);
+
+    if (socket.connected) {
+      attemptRejoin();
+    }
+
+    socket.on('meta:cards', handleMeta);
+    socket.on('room:state', handleRoomState);
+
+    socket.on('room:created', ({ playerId, roomCode, roomState: state }: { playerId: string; roomCode: string; roomState: PublicRoomState }) => {
+      saveSession(playerId, roomCode, nickname);
+      setRoomState(state);
+      setPrivateMessage('방이 생성되었습니다. 이 방 코드를 친구에게 공유하세요.');
+      setHistory([]);
     });
 
-    socket.on('room:created', ({ roomState: state }: { roomState: PublicRoomState }) => setRoomState(state));
-    socket.on('room:joined', ({ roomState: state }: { roomState: PublicRoomState }) => setRoomState(state));
+    socket.on('room:joined', ({ playerId, roomCode, roomState: state }: { playerId: string; roomCode: string; roomState: PublicRoomState }) => {
+      saveSession(playerId, roomCode, nickname);
+      setRoomState(state);
+      setPrivateMessage('방에 참가했습니다.');
+      setHistory([]);
+    });
+
+    socket.on('room:rejoined', ({ playerId, roomCode, nickname: nextNickname, roomState: state }: { playerId: string; roomCode: string; nickname: string; roomState: PublicRoomState }) => {
+      saveSession(playerId, roomCode, nextNickname);
+      setRoomState(state);
+      setPrivateMessage('새로고침 후 기존 플레이어로 복귀했습니다.');
+    });
+
+    socket.on('room:rejoin-failed', ({ message }: { message: string }) => {
+      localStorage.removeItem(STORAGE_PLAYER_ID);
+      localStorage.removeItem(STORAGE_ROOM_CODE);
+      setMyPlayerId('');
+      setRoomState(null);
+      setMyCards([]);
+      setPrivateMessage('');
+      if (message) setError(message);
+      setTimeout(() => setError(''), 3500);
+    });
 
     socket.on('game:started', ({ gameState }: { gameState: PublicRoomState }) => {
       setRoomState(gameState);
@@ -75,9 +144,10 @@ function App() {
     });
 
     socket.on('game:card-revealed', ({ card, disproverId }: { card: Card; disproverId: string }) => {
-      const name = playerName(disproverId, roomState?.players ?? []);
+      const name = playerName(disproverId, roomStateRef.current?.players ?? []);
       setPrivateMessage(`${name}님이 보여준 카드: ${card.name}`);
       pushHistory(`반증 공개: ${name} → ${card.name}`);
+      setDisproveChoices([]);
       setNoteMarks((prev) => ({ ...prev, [`${disproverId}:${card.name}`]: 'yes' }));
     });
 
@@ -86,6 +156,7 @@ function App() {
     });
 
     socket.on('game:no-disprove', ({ suggestion: next }: { suggestion: Suggestion }) => {
+      setDisproveChoices([]);
       setPrivateMessage(`아무도 반증하지 못했습니다: ${next.suspect} / ${next.weapon} / ${next.room}`);
       pushHistory(`반증 없음: ${next.suspect} / ${next.weapon} / ${next.room}`);
     });
@@ -104,7 +175,7 @@ function App() {
     return () => {
       socket.removeAllListeners();
     };
-  }, [moveRoom, roomState?.players]);
+  }, [nickname]);
 
   const allCards = useMemo<Card[]>(() => [
     ...meta.suspects.map((name) => ({ id: `suspect-${name}`, type: 'suspect' as const, name })),
@@ -112,12 +183,12 @@ function App() {
     ...meta.rooms.map((name) => ({ id: `room-${name}`, type: 'room' as const, name })),
   ], [meta]);
 
-  const me = useMemo(() => roomState?.players.find((p) => p.id === socket.id) ?? null, [roomState]);
+  const me = useMemo(() => roomState?.players.find((p) => p.id === myPlayerId) ?? null, [roomState, myPlayerId]);
   const isHost = Boolean(me?.isHost);
-  const isMyTurn = Boolean(roomState?.currentTurnPlayerId === socket.id);
+  const isMyTurn = Boolean(roomState?.currentTurnPlayerId === myPlayerId);
   const winner = roomState?.players.find((p) => p.id === roomState.winnerId) ?? null;
-  const pendingForMe = roomState?.pendingDisprove?.disproverId === socket.id;
-  const canAct = isMyTurn && !roomState?.pendingDisprove;
+  const pendingForMe = roomState?.pendingDisprove?.disproverId === myPlayerId;
+  const canAct = isMyTurn && !roomState?.pendingDisprove && !me?.disconnected;
 
   function pushHistory(message: string) {
     setHistory((prev) => [message, ...prev].slice(0, 12));
@@ -125,16 +196,21 @@ function App() {
 
   function createRoom() {
     setError('');
+    localStorage.setItem(STORAGE_NICKNAME, nickname);
     socket.emit('room:create', { nickname, maxPlayers: 6 });
   }
 
   function joinRoom() {
     setError('');
+    localStorage.setItem(STORAGE_NICKNAME, nickname);
     socket.emit('room:join', { roomCode: joinCode, nickname });
   }
 
   function leaveRoom() {
     socket.emit('room:leave');
+    localStorage.removeItem(STORAGE_PLAYER_ID);
+    localStorage.removeItem(STORAGE_ROOM_CODE);
+    setMyPlayerId('');
     setRoomState(null);
     setMyCards([]);
     setPrivateMessage('');
@@ -191,6 +267,7 @@ function App() {
           <p className="eyebrow">Multiplayer Mystery Game</p>
           <h1>CLUE 온라인</h1>
           <p className="sub">방 코드로 접속해 주사위를 굴리고, 단서를 모아 범인·흉기·장소를 맞히는 실시간 클루 게임입니다.</p>
+          {!rejoinTried && <p className="private">이전 게임 복귀를 확인하는 중입니다...</p>}
           <div className="formBox">
             <label>닉네임</label>
             <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="예: 까유링" />
@@ -225,12 +302,13 @@ function App() {
           <h2>플레이어</h2>
           <div className="players">
             {roomState.players.map((player) => (
-              <div key={player.id} className={`player ${player.id === socket.id ? 'me' : ''} ${player.eliminated ? 'dead' : ''}`}>
+              <div key={player.id} className={`player ${player.id === myPlayerId ? 'me' : ''} ${player.eliminated ? 'dead' : ''} ${player.disconnected ? 'offline' : ''}`}>
                 <strong>{player.nickname}</strong>
                 <span>{player.isHost ? '방장' : '참가자'}</span>
                 <small>{player.location ?? '대기 중'}</small>
                 {roomState.currentTurnPlayerId === player.id && <b>현재 턴</b>}
                 {player.eliminated && <b>탈락</b>}
+                {player.disconnected && <b>재접속 대기</b>}
               </div>
             ))}
           </div>
@@ -245,8 +323,15 @@ function App() {
 
         <section className="mainArea">
           <div className="card statusCard">
-            <p className="eyebrow">Game Status</p>
-            <h2>{roomState.status === 'waiting' ? '대기실' : roomState.status === 'playing' ? `${roomState.turnNumber}번째 턴` : '게임 종료'}</h2>
+            <div className="statusHeader">
+              <div>
+                <p className="eyebrow">Game Status</p>
+                <h2>{roomState.status === 'waiting' ? '대기실' : roomState.status === 'playing' ? `${roomState.turnNumber}번째 턴` : '게임 종료'}</h2>
+              </div>
+              {roomState.status === 'playing' && (
+                <button className="ghost passButton" onClick={passTurn} disabled={!canAct}>턴 넘기기</button>
+              )}
+            </div>
             <p>{roomState.lastMessage}</p>
             {privateMessage && <p className="private">{privateMessage}</p>}
             {roomState.status === 'finished' && (
@@ -294,23 +379,32 @@ function App() {
                   </div>
                 )}
 
-                <hr />
-
-                <h3>최종 고발</h3>
-                <Picker meta={meta} value={accusation} onChange={setAccusation} disabled={!canAct} />
-                <button className="danger" onClick={accuse} disabled={!canAct}>고발하기</button>
-                <button className="ghost full" onClick={passTurn} disabled={!canAct}>턴 넘기기</button>
               </div>
 
-              <div className="card handCard">
-                <h2>내 카드</h2>
-                <div className="cards">
-                  {myCards.map((card) => (
-                    <div key={card.id} className={`miniCard ${card.type}`}>
-                      <span>{card.type}</span>
-                      <strong>{card.name}</strong>
+              <div className="rightColumn">
+                <div className="card handCard">
+                  <h2>내 카드</h2>
+                  <div className="cards">
+                    {myCards.map((card) => (
+                      <div key={card.id} className={`miniCard ${card.type}`}>
+                        <span>{card.type === 'suspect' ? '인물' : card.type === 'weapon' ? '무기' : '장소'}</span>
+                        <strong>{card.name}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="card accusationCard">
+                  <div className="accuseHeader">
+                    <div>
+                      <p className="eyebrow">Final Accusation</p>
+                      <h2>최종 고발</h2>
                     </div>
-                  ))}
+                    <span className="warningText">신중하게 선택하세요</span>
+                  </div>
+                  <p className="muted">정답을 맞히면 승리, 틀리면 탈락합니다.</p>
+                  <Picker meta={meta} value={accusation} onChange={setAccusation} disabled={!canAct} />
+                  <button className="danger full" onClick={accuse} disabled={!canAct}>최종 고발하기</button>
                 </div>
               </div>
 
@@ -345,7 +439,7 @@ function Picker({ meta, value, onChange, disabled, lockRoom }: { meta: CardMeta;
 }
 
 function Notebook({ cards, players, marks, onToggle }: { cards: Card[]; players: PublicPlayer[]; marks: Record<string, NoteMark>; onToggle: (ownerId: string, cardName: string) => void }) {
-  const owners = [{ id: 'mine', nickname: '내 카드' }, ...players.map((p) => ({ id: p.id, nickname: p.nickname })), { id: 'solution', nickname: '정답 후보' }];
+  const owners = [{ id: 'mine', nickname: '내 카드' }, ...players.map((p) => ({ id: p.id, nickname: p.disconnected ? `${p.nickname}(오프라인)` : p.nickname })), { id: 'solution', nickname: '정답 후보' }];
 
   return (
     <div className="card notebookCard">
@@ -362,7 +456,7 @@ function Notebook({ cards, players, marks, onToggle }: { cards: Card[]; players:
           <tbody>
             {cards.map((card) => (
               <tr key={card.id}>
-                <td><span className={`typeDot ${card.type}`}>{card.type[0].toUpperCase()}</span>{card.name}</td>
+                <td><span className={`typeDot ${card.type}`}>{typeLabel(card.type)}</span>{card.name}</td>
                 {owners.map((owner) => {
                   const mark = marks[`${owner.id}:${card.name}`] ?? 'unknown';
                   return (
@@ -378,6 +472,12 @@ function Notebook({ cards, players, marks, onToggle }: { cards: Card[]; players:
       </div>
     </div>
   );
+}
+
+function typeLabel(type: Card['type']): string {
+  if (type === 'suspect') return '인';
+  if (type === 'weapon') return '무';
+  return '장';
 }
 
 function markLabel(mark: NoteMark): string {

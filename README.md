@@ -1,8 +1,21 @@
 # Clue Multiplayer MVP
 
-React + TypeScript + Vite + Node.js + Express + Socket.IO로 만든 클루 보드게임 MVP입니다.
+React + TypeScript + Vite + Node.js + Express + Socket.IO 기반 클루 멀티플레이 MVP입니다.
 
-## 실행 방법
+## 주요 기능
+
+- 방 생성 / 방 코드 참가
+- 서버 메모리 기반 실시간 멀티플레이
+- 한글 카드명: 인물, 무기, 장소
+- 주사위 기반 이동 가능 장소 계산
+- 한 턴에 추리 1회 제한
+- 반증자가 보여줄 카드 직접 선택
+- 추리 노트
+- 새로고침 재접속 복구
+  - 프론트: playerId, roomCode를 localStorage 저장
+  - 서버: disconnect 후 60초 동안 기존 플레이어 보존
+
+## 로컬 실행
 
 ```bash
 npm install
@@ -10,32 +23,19 @@ npm run install:all
 npm run dev
 ```
 
-- Frontend: http://localhost:5173
-- Backend: http://localhost:4000
+프론트: http://localhost:5173
+백엔드: http://localhost:4000
 
-## 기능
+## 배포
 
-- 닉네임 입력
-- 방 생성
-- 6자리 코드로 방 참가
-- 플레이어 목록
-- 2명 이상 게임 시작
-- 정답 봉투 생성
-- 카드 랜덤 분배
-- 자기 카드만 보기
-- 턴 진행
-- 방 선택 이동
-- 추리하기
-- 자동 반증 처리
-- 고발하기
-- 승리 / 탈락 / 게임 종료
+- client: Vercel
+- server: Render
 
-## 친구와 테스트하는 방법
+Render 환경변수:
 
-같은 와이파이에서 테스트하려면 `client/src/socket.ts`의 서버 주소를 본인 PC IP로 바꾸세요.
-
-예:
-
-```ts
-export const socket = io("http://192.168.0.10:4000");
+```txt
+CLIENT_URL=https://clue-client-new.vercel.app
+PORT=4000
 ```
+
+프론트 서버 주소는 `client/src/socket.ts`의 기본값 또는 Vercel 환경변수 `VITE_SERVER_URL`로 설정할 수 있습니다.

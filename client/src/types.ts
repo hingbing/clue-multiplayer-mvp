@@ -14,6 +14,7 @@ export interface PublicPlayer {
   isHost: boolean;
   location: string | null;
   eliminated: boolean;
+  disconnected: boolean;
 }
 
 export interface Suggestion {

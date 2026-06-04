@@ -9,11 +9,13 @@ export interface Card {
 
 export interface Player {
   id: string;
+  socketId: string | null;
   nickname: string;
   isHost: boolean;
   hand: Card[];
   location: string | null;
   eliminated: boolean;
+  disconnected: boolean;
 }
 
 export interface Solution {
@@ -41,6 +43,7 @@ export interface PublicPlayer {
   isHost: boolean;
   location: string | null;
   eliminated: boolean;
+  disconnected: boolean;
 }
 
 export interface PublicPendingDisprove {
